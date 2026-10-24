@@ -1,0 +1,82 @@
+# Web Framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+python-dotenv>=1.0.0
+
+# Database
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.9
+alembic>=1.12.0
+
+# Redis
+redis>=5.0.0
+
+# Authentication
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+pydantic[email]>=2.5.0
+
+# AI/LLM
+openai>=1.0.0
+transformers>=4.51.0,<5
+torch>=2.6,<3
+sentencepiece>=0.2,<1
+tokenizers>=0.21.0,<1
+llama-index>=0.9.0
+llama-index-postprocessor-dashscope-rerank>=0.1.0
+# LangGraph 是唯一主链路的执行引擎；下限按本次实际验证的版本锁定。
+# durability="sync"、custom 流与 langgraph.config.get_stream_writer 都需要 1.x。
+langgraph>=1.2.11,<2
+# 会话摘要复用消息序列化和裁剪，XML 格式以此实际验证版本为下限。
+langchain-core>=1.5.5,<2
+# 阿里 EnhancedSearch 使用官方 MCP SDK v2，实际验证 2.3.0；独立于 LangChain 工具适配器。
+mcp>=2.3.0,<3
+# 图检查点走 psycopg3 异步连接，不复用 psycopg2 的 SQLAlchemy 会话。
+langgraph-checkpoint-postgres>=3.1.2,<4
+psycopg[binary,pool]>=3.3.6,<4
+
+# Vector Database
+# Milvus Server 固定为 2.3.3；官方建议 2.3.x 服务端使用 2.3.7 SDK。
+# PyMilvus 2.3.7 依赖的 grpcio 不支持 Python 3.13，评测请使用 Python 3.11。
+pymilvus==2.3.7
+
+# Full-text Search (与 Milvus 组成混合检索)
+elasticsearch>=8.11.0,<9.0.0
+
+# NLP
+nltk>=3.8.0
+jieba>=0.42.0
+
+# HTTP Client
+httpx>=0.25.0
+socksio>=1.0.0
+aiohttp>=3.9.0
+requests>=2.31.0
+
+# Web Scraping & Text Extraction
+beautifulsoup4>=4.12.0
+trafilatura>=2.2.0,<3.0.0
+markdownify>=1.2.3,<2
+lxml>=4.9.0
+
+# Document Parsing
+PyPDF2>=3.0.0
+python-docx>=1.0.0
+openpyxl>=3.1.0
+markdown>=3.5.0
+alibabacloud_docmind_api20220711>=1.0.0
+
+# Data Processing
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+wordcloud>=1.9.0
+
+# Utils
+pyyaml>=6.0.0
+python-dateutil>=2.8.0
+json-repair>=0.63,<1

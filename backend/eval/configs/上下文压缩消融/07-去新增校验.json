@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "policy_version": "context-ablation-v1",
+  "group": "去新增校验",
+  "artifact_offload": true,
+  "early_offload": true,
+  "recent_offload": true,
+  "semantic_summary": true,
+  "pinned_contract": true,
+  "semantic_verification": false,
+  "early_tool_rounds": 3,
+  "tool_content_tokens": 800,
+  "preview_chars": 400,
+  "soft_token_cap": 17000,
+  "soft_ratio": 0.85,
+  "summary_ratio": 0.95,
+  "replay_agents": [
+    "DeepScout"
+  ],
+  "stage_budgets": {
+    "ChiefArchitect": {
+      "context_window": 32768,
+      "max_input": 30000,
+      "safety_tokens": 1024
+    },
+    "DeepScout": {
+      "context_window": 32768,
+      "max_input": 30000,
+      "safety_tokens": 1024
+    },
+    "DataAnalyst": {
+      "context_window": 32768,
+      "max_input": 30000,
+      "safety_tokens": 1024
+    },
+    "LeadWriter": {
+      "context_window": 32768,
+      "max_input": 30000,
+      "safety_tokens": 1024
+    },
+    "CriticMaster": {
+      "context_window": 32768,
+      "max_input": 30000,
+      "safety_tokens": 1024
+    }
+  },
+  "output_limits": {
+    "ChiefArchitect": 3000,
+    "DeepScout": 6000,
+    "DataAnalyst": 3000,
+    "LeadWriter": 6000,
+    "CriticMaster": 6000
+  },
+  "summary_budget": {
+    "context_window": 32768,
+    "max_input": 30000,
+    "safety_tokens": 1024
+  },
+  "summary_output_tokens": 3000,
+  "summary_max_chunks": 8,
+  "summary_max_merge_levels": 4,
+  "summary_strategy": "chunk-merge-v1",
+  "history_read_max_calls": 2,
+  "history_read_max_chars": 8000,
+  "verification": {
+    "rules_version": "verification-v2",
+    "nli_support": true,
+    "coverage": false,
+    "key_fields": true,
+    "evidence_context": true,
+    "repair_attempts": 1,
+    "max_facts": 64,
+    "max_context_chars": 2400,
+    "max_evidence_windows": 8,
+    "max_stage_calls": 128,
+    "timeout_seconds": 180.0
+  },
+  "nli": {
+    "model_id": "MoritzLaurer/mDeBERTa-v3-base-mnli-xnli",
+    "revision": "8adb042d524ecd5c26d3e3ba0e3fbcf7e2d0864c",
+    "model_dir": ".cache/nli/8adb042d524ecd5c26d3e3ba0e3fbcf7e2d0864c",
+    "entailment_threshold": 0.85,
+    "contradiction_threshold": 0.5,
+    "review_confidence_threshold": 0.8,
+    "max_length": 512,
+    "batch_size": 4,
+    "max_pairs": 256,
+    "timeout_seconds": 60.0,
+    "aggregation": "any_support_no_contradiction_v1"
+  },
+  "input_history": {
+    "version": "input-view-v2",
+    "reference_materials": true,
+    "min_reference_tokens": 128
+  }
+}

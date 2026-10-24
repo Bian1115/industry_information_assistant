@@ -1,0 +1,9 @@
+services:
+  crawl4ai:
+    image: unclecode/crawl4ai:0.8.0
+    container_name: industry-crawl4ai
+    ports:
+      - "127.0.0.1:11235:11235"
+    shm_size: "1gb"
+    mem_limit: "2g"
+    restart: unless-stopped

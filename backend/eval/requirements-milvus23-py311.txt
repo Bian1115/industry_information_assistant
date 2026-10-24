@@ -1,0 +1,17 @@
+# LongMemEval 索引重建的最小 Python 3.11 运行时。
+# 与 docker-compose-base.yml 的 Milvus Server 2.3.3 保持 SDK 兼容。
+python-dotenv>=1.0.0
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.9
+openai>=1.0.0
+httpx>=0.25.0
+pymilvus==2.3.7
+# PyMilvus 2.3.7 pins environs 9.5, which still reads marshmallow's
+# removed __version_info__ attribute and therefore requires marshmallow 3.x.
+marshmallow<4
+# PyMilvus 2.3.7 imports pkg_resources, removed from newer setuptools.
+setuptools<81
+# Imported by app/core/__init__.py while the evaluation adapter loads the DB.
+bcrypt>=4.0.0
+python-jose>=3.3.0
+redis>=5.0.0

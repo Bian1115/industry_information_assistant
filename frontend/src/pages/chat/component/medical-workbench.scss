@@ -1,0 +1,24 @@
+.medical-start { max-width: 1000px; margin: 0 auto; padding: 48px 40px 80px; color: #20363b; }
+.medical-start__eyebrow { color: #137d77; font-weight: 600; letter-spacing: .08em; font-size: 12px; }
+.medical-start h1 { font-size: clamp(26px, 4vw, 38px); margin: 12px 0; letter-spacing: -1px; }
+.medical-start__intro { color: #64767a; line-height: 1.8; margin-bottom: 30px; }
+.medical-start__card { background: white; border: 1px solid #dde9e7; border-radius: 16px; padding: 28px; box-shadow: 0 6px 24px #184b4510; }
+.medical-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px; }
+.medical-start__footer { color: #758689; font-size: 13px; line-height: 1.8; margin-top: 24px; }
+.medical-workbench { padding: 24px; background: #f8fbfa; min-height: 100%; min-width: 0; color: #20363b; }
+.medical-workbench h2 { font-size: 22px; margin: 4px 0 10px; }
+.medical-workbench__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.medical-workbench__muted { color: #718080; font-size: 13px; line-height: 1.7; }
+.medical-workbench__metrics { display: flex; flex-wrap: wrap; gap: 12px; margin: 18px 0; }
+.medical-workbench__metric { min-width: 90px; flex: 1; border: 1px solid #deebe7; border-radius: 10px; background: white; padding: 12px; }
+.medical-workbench__metric strong { display: block; font-size: 24px; color: #176a61; }
+.medical-paper { margin: 12px 0; padding: 18px; border: 1px solid #e0e9e6; border-radius: 12px; background: white; }
+.medical-paper h3 { font-size: 15px; line-height: 1.6; margin: 0 0 9px; }
+.medical-paper__abstract { line-height: 1.8; margin: 12px 0; white-space: pre-wrap; }
+.medical-paper blockquote, .medical-evidence-quote { white-space: pre-wrap; border-left: 3px solid #318d82; padding: 10px 14px; background: #f0f7f5; line-height: 1.8; }
+.medical-workbench__report { background: white; padding: 22px; border: 1px solid #e0e9e6; border-radius: 12px; overflow-wrap: anywhere; }
+.medical-workbench__report table { display: block; overflow-x: auto; border-collapse: collapse; }
+.medical-workbench__report td, .medical-workbench__report th { border: 1px solid #dce6e4; padding: 8px; }
+.medical-scope-summary { padding: 14px 24px 0; }
+.medical-workbench .ant-table { font-size: 12px; }
+@media (max-width: 780px) { .medical-start { padding: 28px 16px; } .medical-start__card { padding: 18px; } .medical-form-grid { grid-template-columns: 1fr; } .medical-workbench { padding: 16px; } }

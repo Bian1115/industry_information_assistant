@@ -1,0 +1,10 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+
+COPY 服务.py /app/服务.py
+
+USER 10001:10001
+EXPOSE 8080
+CMD ["python", "服务.py"]

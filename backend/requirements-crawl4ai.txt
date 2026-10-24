@@ -1,0 +1,5 @@
+# 可选动态网页兜底。基础 DeepResearch 不安装也能运行。
+# 安装后 WebReaderService 会在 trafilatura 提取不足时自动调用。
+crawl4ai>=0.8.0,<1.0.0
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.29,<1.0

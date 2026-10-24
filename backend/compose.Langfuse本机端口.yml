@@ -1,0 +1,12 @@
+# 在已有 Langfuse Compose 上追加此文件，保留原数据卷并避开业务库/Milvus端口。
+# docker compose -p langfuse -f /Users/bxy/projects/Agent3/langfuse/docker-compose.yml -f "$PWD/backend/compose.Langfuse本机端口.yml" up -d
+services:
+  postgres:
+    ports: !reset []
+  minio:
+    ports: !override
+      - "127.0.0.1:9090:9000"
+      - "127.0.0.1:19091:9001"
+  langfuse-web:
+    ports: !override
+      - "127.0.0.1:3000:3000"

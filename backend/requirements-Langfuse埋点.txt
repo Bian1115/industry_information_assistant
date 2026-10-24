@@ -1,0 +1,2 @@
+# 可选埋点依赖；与 Langfuse v4 observation 接口及离线兼容测试配套。
+langfuse==4.15.1

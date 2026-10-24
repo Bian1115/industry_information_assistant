@@ -1,0 +1,25 @@
+{
+  "name": "longmemeval-s-stratified-pilot-10-v1",
+  "description": "固定 100 题中的确定性分层 10 题，用于外部记忆系统成本和效果预评估。",
+  "distribution": {
+    "abstention": 1,
+    "knowledge-update": 2,
+    "multi-session": 2,
+    "single-session-assistant": 1,
+    "single-session-preference": 1,
+    "single-session-user": 1,
+    "temporal-reasoning": 2
+  },
+  "question_ids": [
+    "001be529",
+    "031748ae",
+    "031748ae_abs",
+    "06f04340",
+    "07741c44",
+    "0db4c65d",
+    "1192316e",
+    "2ebe6c90",
+    "37f165cf",
+    "41275add"
+  ]
+}

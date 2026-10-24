@@ -1,0 +1,62 @@
+{
+  "_comment": [
+    "benchmark 数据源配置。production 是内置的，不在这里定义，也不允许覆盖。",
+    "字段全部可选：留空即表示该部件不切换，走生产逻辑。",
+    "  kb_collection    覆盖 Milvus 集合名 / ES 索引名（两者同名）",
+    "  sql_dsn          Text2SQL 连到的数据库",
+    "  sql_schema_file  喂给 LLM 的表结构描述文件（相对本文件所在目录）",
+    "用法: with use_profile('crud_rag'): ...  或  EVAL_PROFILE=crud_rag python ..."
+  ],
+
+  "profiles": {
+    "crud_rag": {
+      "description": "CRUD-RAG 中文 RAG 基准：8 万条中文新闻语料，用于给混合检索做压测调参",
+      "benchmark": "CRUD-RAG",
+      "kb_collection": "bench_crud_rag",
+      "meta": {
+        "repo": "https://github.com/IAAR-Shanghai/CRUD_RAG",
+        "corpus": "80000+ 条中文新闻",
+        "适用任务": "多文档问答、多文档摘要（最接近研报综述场景）",
+        "已知局限": "问答对由 GPT-4 合成，最后提交 2025-05"
+      }
+    },
+
+    "fineval_rag": {
+      "description": "FinEval 检索问答子集：目前唯一现成的中文金融 RAG 评测资源",
+      "benchmark": "FinEval",
+      "kb_collection": "bench_fineval",
+      "meta": {
+        "repo": "https://github.com/SUFE-AIFLM-Lab/FinEval",
+        "适用任务": "retrieval QA 题型"
+      }
+    },
+
+    "dusql": {
+      "description": "DuSQL 中文 Text2SQL：200 库 / 23979 问答对，含匹配/计算/推理题型",
+      "benchmark": "DuSQL",
+      "sql_dsn": "sqlite:///eval/data/dusql/dusql.db",
+      "sql_schema_file": "schemas/dusql_schema.txt",
+      "meta": {
+        "paper": "https://aclanthology.org/2020.emnlp-main.562.pdf",
+        "指标": "Execution Accuracy (EX)",
+        "为何选它": "「计算」题型对应本系统要算的 CAGR、同比增长率"
+      }
+    },
+
+    "falcon": {
+      "description": "Falcon 中文企业级 Text2SQL：600 题 / 28 库，77% 需多表推理",
+      "benchmark": "Falcon",
+      "sql_dsn": "sqlite:///eval/data/falcon/falcon.db",
+      "sql_schema_file": "schemas/falcon_schema.txt",
+      "meta": {
+        "paper": "https://arxiv.org/html/2510.24762",
+        "为何最贴合": "论文批评 CSpider 是「中文问题+英文 schema」的翻译产物；本项目 industry_stats 恰好就是中文 metric_name 值 + 英文列名"
+      }
+    },
+
+    "smoke": {
+      "description": "冒烟测试用：只切集合名，验证适配层本身是否生效",
+      "kb_collection": "bench_smoke_test"
+    }
+  }
+}

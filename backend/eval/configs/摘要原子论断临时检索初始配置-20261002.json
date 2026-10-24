@@ -1,0 +1,15 @@
+{
+  "embedding_model": "text-embedding-v4",
+  "embedding_dimensions": 1024,
+  "rerank_model": "qwen3-rerank",
+  "chunk_tokens": 1024,
+  "dense_top_k": 40,
+  "lexical_top_k": 40,
+  "coarse_top_k": 60,
+  "rerank_top_k": 12,
+  "rrf_k": 60,
+  "neighbor_sentences": 1,
+  "max_chunks": 20000,
+  "batch_size": 10,
+  "timeout_seconds": 60.0
+}

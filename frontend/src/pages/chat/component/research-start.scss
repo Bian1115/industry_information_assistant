@@ -1,0 +1,19 @@
+.research-start {
+  max-width: 980px; margin: 0 auto; padding: 72px 48px 48px; color: #20363b;
+  &__eyebrow { display: flex; align-items: center; gap: 8px; color: #137d77; font-size: 12px; font-weight: 650; letter-spacing: .14em; }
+  h1 { margin: 20px 0 14px; font-size: clamp(30px, 4vw, 46px); line-height: 1.3; letter-spacing: -1.5px; font-weight: 650; }
+  &__intro { font-size: 15px; color: #697c80; line-height: 1.8; margin: 0 0 32px; }
+  &__composer { padding: 24px; background: #fff; border: 1px solid #d8e7e4; border-radius: 18px; box-shadow: 0 10px 40px #184b450a;
+    .ant-form-item { margin-bottom: 20px; }
+    .ant-form-item-label > label { font-size: 15px; font-weight: 600; color: #20363b; }
+    textarea.ant-input { padding: 14px 16px; background: #f8fbfa; border: 1px solid #e3ece9; border-radius: 10px; font-size: 15px; line-height: 1.8; resize: none; }
+  }
+  &__composer-footer { display: flex; justify-content: space-between; align-items: center; gap: 16px; color: #6d8184; font-size: 12px; .ant-btn { border-radius: 9px; } }
+  &__examples { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 18px 0 40px; font-size: 12px; color: #7b8b8d; .ant-btn { color: #55716d; border-color: #e0e9e6; border-radius: 20px; font-size: 12px; background: #fff; } }
+  &__steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; article { position: relative; padding: 22px; border: 1px solid #e7eeeb; border-radius: 12px; background: #fafcfb; } h2 { font-size: 15px; margin: 16px 0 8px; font-weight: 600; } p { font-size: 13px; line-height: 1.8; color: #78898b; margin: 0; } }
+  &__step-icon { display: inline-flex; color: #177c73; padding: 8px; background: #eaf4f0; border-radius: 8px; font-size: 18px; }
+  &__step-number { position: absolute; right: 22px; top: 26px; font-size: 12px; color: #a2b3af; letter-spacing: .08em; }
+  &__footer { color: #839290; font-size: 12px; line-height: 1.8; margin: 24px 0 0; }
+}
+.research-conversation-header { display: flex; justify-content: space-between; gap: 16px; padding: 18px 24px; border-bottom: 1px solid #e8efec; color: #718080; font-size: 12px; strong { color: #197b73; font-size: 13px; } }
+@media (max-width: 780px) { .research-start { padding: 36px 20px; &__composer { padding: 18px; } &__shortcut { display: none; } &__steps { grid-template-columns: 1fr; gap: 10px; } &__examples { margin-bottom: 24px; } } .research-conversation-header { padding: 14px 16px; flex-wrap: wrap; } }
