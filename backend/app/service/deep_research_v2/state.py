@@ -19,7 +19,7 @@ from .hypothesis_policy import resolve_hypothesis_enabled
 
 # 图拓扑与状态字段的版本号。恢复时用它判断旧检查点能否直接续跑；
 # 改变节点、边或必需字段时必须同时升版本；service显式适配无路由配置的v1恢复。
-GRAPH_VERSION = "single-main-v6-atomic-events"
+GRAPH_VERSION = "single-main-v7-review-4d-100"
 
 
 class ResearchPhase(str, Enum):
@@ -107,22 +107,19 @@ class Chart:
 
 @dataclass
 class CriticFeedback:
-    """评论家反馈"""
-    id: str
-    target_section: str
-    issue_type: Literal["missing_source", "logic_error", "bias", "hallucination", "outdated", "incomplete"]
+    """当前轮三维审核问题；target 使用模型输出，resolved_section_ids 由程序定位。"""
+    issue_id: str
+    target: Dict[str, Any]
+    issue_type: Literal["missing_source", "logical_error", "bias", "outdated", "content_omission",
+                        "insufficient_depth", "readability_issue", "instruction_violation"]
     severity: Literal["critical", "major", "minor"]
     description: str
-    suggestion: str
-    resolved: bool = False
-    report_quote: str = ""
-    requirement: str = ""
-    evidence: str = ""
-    acceptance_criteria: str = ""
-    requires_new_search: bool = False
-    search_query: str = ""
-    writer_status: str = "pending"     # 处理记录，不是复审结论
-    review_status: str = "pending"     # resolved / dismissed 才结束待办
+    evidence: str
+    modification: str
+    requires_new_search: bool
+    search_query: str
+    resolved_section_ids: List[str] = field(default_factory=list)
+    writer_status: str = "pending"
 
 
 @dataclass
@@ -220,28 +217,28 @@ class ResearchState(TypedDict):
     claims: List[Dict[str, Any]]             # 当前报告汇总，附程序赋值的 section_id
     report_verification_claims: List[Dict[str, Any]]  # 从最终报告独立提取，区别于Writer声明
     report_claim_extraction: Dict[str, Any]   # 独立提取单元覆盖与调用轨迹
-    citation_issue_handoffs: List[Dict[str, Any]]  # 旧Critic引用问题交接记录，不代表已解决
     final_report: str                       # 最终报告
     references: List[Dict[str, Any]]        # 参考文献
     conclusion_evidence_map: List[Dict[str, Any]]  # 结论 -> 假设 -> 正反/不确定证据映射
 
     # 审核反馈
     critic_feedback: List[Dict[str, Any]]   # 评论家反馈
-    critic_history: List[List[Dict[str, Any]]]  # 各轮问题账本快照
+    critic_history: List[List[Dict[str, Any]]]  # 历次审核问题快照（不合并入当前轮）
     writer_revision_records: List[Dict[str, Any]]  # Writer按问题/章节返回的定位与证据，待复审
     revision_original_sections: Dict[str, str]  # 补搜重开前的章节，仅作编辑对象
     issue_search_results: Dict[str, Dict[str, Any]]  # 按问题保存的补搜结果，不代表语义支持
     unresolved_issues: int                  # 未解决问题数
     quality_score: float                    # 质量评分
-    quality_score_basis: str                # 报告三维评分口径版本
-    quality_dimension_scores: Dict[str, int]  # 整体逻辑、要求覆盖、时效性
+    quality_score_basis: str                # 报告三维百分制评分口径版本
+    quality_dimension_scores: Dict[str, float]  # 可读性、全面性、深度
+    quality_review_summary: str             # 当前总评供低分且无单章问题时修订
     citation_verification: Dict[str, Any]    # 当前报告的可选核验审计
     scout_citation_verification: Dict[str, Any]  # Scout 事实的独立核验审计
     citation_verification_config: Dict[str, Any]  # 每次运行冻结阶段开关与正文失败策略
     citation_verification_settings: Dict[str, Any]  # 开启时冻结 NLI 参数
     report_synthesis: Dict[str, Any]  # 可重组的摘要、结论与展望
     citation_repair: Dict[str, Any]  # 一次改写/删除的前后审计与失败记录
-    quality_score_status: str               # not_reviewed/valid/derived_from_dimensions/derived_from_issue_severity/valid_after_retry/fallback_invalid_model_output
+    quality_score_status: str               # not_reviewed/derived_from_dimensions
     quality_verdict: str                    # not_reviewed/pass/needs_revision/major_issues
     pending_research_tasks: List[Dict[str, Any]]  # 带问题ID/章节/验收条件的定向补证任务
 
@@ -368,7 +365,6 @@ def create_initial_state(
         claims=[],
         report_verification_claims=[],
         report_claim_extraction={},
-        citation_issue_handoffs=[],
         final_report="",
         references=[],
         conclusion_evidence_map=[],
@@ -381,6 +377,7 @@ def create_initial_state(
         quality_score=0.0,
         quality_score_basis="not_reviewed",
         quality_dimension_scores={},
+        quality_review_summary="",
         citation_verification=citation_verification_status(),
         scout_citation_verification=citation_verification_status(),
         citation_verification_config={"scout_facts": False, "report_claims": False},

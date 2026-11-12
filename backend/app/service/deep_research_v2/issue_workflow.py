@@ -1,90 +1,50 @@
-"""按问题返工的输入、修改定位与逐项复审；Writer 无权关闭审核问题。"""
+"""当前轮审核意见的按章修订与修改记录；下一轮 Critic 重新审核完整报告。"""
 
 from __future__ import annotations
 
 from copy import deepcopy
 import hashlib
 import json
-import re
 from typing import Any, Mapping
-
-
-TERMINAL_REVIEWS = {"resolved", "dismissed"}
 
 
 def text(value: Any) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
-def signature(issue: Mapping) -> str:
-    fields = {key: issue.get(key) for key in
-              ("target_section", "issue_type", "location", "description")}
-    return hashlib.sha256(json.dumps(fields, ensure_ascii=False, sort_keys=True).encode()).hexdigest()[:16]
-
-
-def issue_ledger(state: Mapping) -> list[dict]:
-    """旧检查点的 resolved 可能来自 Writer 自报，须重新经过显式复审。"""
-    result, seen = [], set()
-    for index, original in enumerate(state.get("critic_feedback") or []):
-        issue = deepcopy(original)
-        ident = text(issue.get("id")) or f"issue_{signature(issue)}"
-        if ident in seen:
-            ident = f"issue_{signature(issue)}_{index}"
-        issue["id"] = ident
-        seen.add(ident)
-        if issue.get("review_status") not in TERMINAL_REVIEWS:
-            if issue.get("resolved"):
-                issue.setdefault("writer_status", "addressed")
-            issue["resolved"] = False
-            issue.setdefault("review_status", "pending")
-        else:
-            issue["resolved"] = True  # 兼容旧消费者；review_status 区分修复和撤销误报。
-        result.append(issue)
-    return result
-
-
 def open_issues(state: Mapping) -> list[dict]:
-    return [issue for issue in issue_ledger(state) if not issue["resolved"]]
+    """仅返回最近一次完整审核的问题；不把上一轮问题自动合并进来。"""
+    return list(state.get("critic_feedback") or [])
 
 
 def section_issues(state: Mapping, section_id: str) -> list[dict]:
-    known = {s["id"] for s in state.get("outline") or []}
-    result = []
-    for issue in open_issues(state):
-        targets = set(re.findall(r"sec_[A-Za-z0-9_]+", str(issue.get("target_section") or ""))) & known
-        if (not targets or section_id in targets):
-            result.append(issue)
-    return result
+    return [issue for issue in open_issues(state)
+            if section_id in issue["resolved_section_ids"]]
 
 
-def acceptance(issue: Mapping) -> Any:
-    return issue.get("acceptance_criteria") or issue.get("suggestion") or (
-        "回应所指原句或用户要求，说明依据和仍未解决的缺口，由 Critic 逐项复查。")
+def acceptance(issue: Mapping) -> str:
+    return issue["modification"]
 
 
 def issue_query(issues: list[dict]) -> str:
     return "\n".join(" ".join(text(issue.get(key)) for key in
-                              ("report_quote", "requirement", "description", "search_query"))
+                              ("description", "evidence", "modification", "search_query"))
                      for issue in issues)
 
 
 def revision_context(state: Mapping, section_id: str) -> str:
-    """来源已读不代表语义支持；支持范围与缺口须在原文基础上显式回应。"""
+    """将当前轮意见及其补搜结果交给对应章节的 Writer，要求具体修改与依据。"""
     rows = []
     for issue in section_issues(state, section_id):
-        search = (state.get("issue_search_results") or {}).get(issue["id"], {})
+        search = (state.get("issue_search_results") or {}).get(issue["issue_id"], {})
         rows.append({
-            "issue_id": issue["id"], "location": issue.get("location", ""),
-            "report_quote": issue.get("report_quote", ""),
-            "requirement": issue.get("requirement") or state.get("query", ""),
-            "problem": issue.get("description", ""),
-            "judgment_basis": issue.get("evidence") or "原审核未提供具体依据；须核对原句和实际材料，允许指出旧批评有误。",
-            "requested_change": issue.get("suggestion") or issue.get("description") or "核对问题与原要求，缺证据时保留局限。",
-            "acceptance_criteria": acceptance(issue),
+            "issue_id": issue["issue_id"], "target": issue["target"],
+            "requirement": state.get("query", ""),
+            "problem": issue["description"], "judgment_basis": issue["evidence"],
+            "requested_change": issue["modification"], "acceptance_criteria": acceptance(issue),
             "new_evidence": search or {
-                "status": "not_requested" if not issue.get("requires_new_search") else "not_recorded",
-                "meaning": "没有本问题的补搜结果；按下方实际原文判断，不得假称已取得支持。"},
-            "evidence_instruction": "逐项阅读提供的原文，说明新/已有证据具体支持什么、仍缺什么。来源数量或读取成功不代表问题解决。",
+                "status": "not_requested" if not issue["requires_new_search"] else "not_recorded",
+                "meaning": "没有本问题的补搜结果；按实际原文判断，不得假称已取得支持。"},
         })
     return json.dumps(rows, ensure_ascii=False)
 
@@ -101,7 +61,7 @@ ISSUE_RESPONSE_INSTRUCTIONS = """## 按问题修改与修改记录
 "remaining_gaps":"仍缺什么，或明确无剩余缺口","acceptance_check":"逐项回应验收条件"}。
 若提供的是 evidence_units，evidence 使用 document_id 和 evidence_unit_ids；不得创建未提供的编号。
 首尾合稿只提供章节依据时，evidence 改用 {"source_claim_ids":["本次提供的C编号"]}，不伪造来源原句编号。
-Writer的addressed只表示已处理、等待复审，不代表已解决。无问题时 issue_responses 返回 []。
+Writer的addressed只表示已处理、等待复审，不代表审核通过，下一轮由 Critic 根据完整报告重新判断。无问题时 issue_responses 返回 []。
 不能用旧addressed_issues数组代替issue_responses的逐项定位、依据和验收回应。
 """
 
@@ -134,7 +94,7 @@ def record_writer_responses(state: dict, section_id: str, content: str,
     lookup = evidence_lookup(packet)
     rows = []
     for issue in issues:
-        matches = [row for row in supplied if isinstance(row, dict) and row.get("issue_id") == issue["id"]]
+        matches = [row for row in supplied if isinstance(row, dict) and row.get("issue_id") == issue["issue_id"]]
         row = deepcopy(matches[0]) if len(matches) == 1 else {}
         errors = []
         if len(matches) != 1:
@@ -167,7 +127,7 @@ def record_writer_responses(state: dict, section_id: str, content: str,
                 continue
             excerpts.extend({**lookup[(ref.get("document_id"), fields[0], ident)],
                              "document_id": ref.get("document_id"), fields[0]: [ident]} for ident in ids)
-        row.update(issue_id=issue["id"], section_id=section_id,
+        row.update(issue_id=issue["issue_id"], section_id=section_id,
                    iteration=int(state.get("iteration", 0)),
                    content_sha256=hashlib.sha256(content.encode()).hexdigest(),
                    validation_errors=errors, evidence_excerpts=excerpts)
@@ -183,14 +143,13 @@ def apply_writer_records(state: dict, rows: list[dict]) -> None:
     keys = {(r["issue_id"], r["section_id"], r["iteration"]) for r in rows}
     state["writer_revision_records"] = [r for r in state.get("writer_revision_records") or []
         if (r["issue_id"], r["section_id"], r["iteration"]) not in keys] + rows
-    state["critic_feedback"] = issue_ledger(state)
     for issue in state["critic_feedback"]:
         responses = [r for r in state["writer_revision_records"]
-                     if r["issue_id"] == issue["id"] and r["iteration"] == int(state.get("iteration", 0))]
+                     if r["issue_id"] == issue["issue_id"] and r["iteration"] == int(state.get("iteration", 0))]
         if responses:
             expected = {section["id"] for section in state.get("outline") or []
-                        if any(item["id"] == issue["id"] for item in section_issues(state, section["id"]))}
-            if any(item["id"] == issue["id"] for item in section_issues(state, "__synthesis__")):
+                        if any(item["issue_id"] == issue["issue_id"] for item in section_issues(state, section["id"]))}
+            if any(item["issue_id"] == issue["issue_id"] for item in section_issues(state, "__synthesis__")):
                 expected.add("__synthesis__")
             statuses = {row["status"] for row in responses}
             if "not_reported" in statuses:
@@ -202,79 +161,3 @@ def apply_writer_records(state: dict, rows: list[dict]) -> None:
             else:
                 status = next(iter(statuses))
             issue["writer_status"] = status
-
-
-def review_packet(state: Mapping) -> str:
-    rows = []
-    for record in state.get("writer_revision_records") or []:
-        if record.get("iteration") != int(state.get("iteration", 0)):
-            continue
-        row = deepcopy(record)
-        quote = text(row.get("revised_quote"))
-        row["located_in_current_report"] = bool(quote and quote in str(state.get("final_report") or ""))
-        rows.append(row)
-    return json.dumps(rows, ensure_ascii=False)
-
-
-def reconcile_reviews(state: Mapping, result: dict) -> tuple[list[dict], list[dict]]:
-    """显式逐项复查是唯一关闭入口；遗漏、分数、指纹和来源数量都不关闭问题。"""
-    ledger = issue_ledger(state)
-    previous = {row["id"]: row for row in ledger if not row["resolved"]}
-    reviews = result.get("issue_reviews", [])
-    if not isinstance(reviews, list):
-        raise ValueError("issue_reviews必须是数组")
-    checks = {}
-    for review in reviews:
-        if not isinstance(review, dict) or not text(review.get("issue_id")) or review["issue_id"] not in previous:
-            raise ValueError("复查引用了未知或已关闭的问题ID")
-        ident = review["issue_id"]
-        if ident in checks or text(review.get("status")) not in {"resolved", "unresolved", "dismissed"}:
-            raise ValueError("复查问题ID重复或状态无效")
-        checks[ident] = review
-    returned = {text(row.get("id")): row for row in result["issues"]}
-    returned_ids = [text(row.get("id")) for row in result["issues"] if text(row.get("id"))]
-    if len(returned_ids) != len(set(returned_ids)):
-        raise ValueError("issues包含重复问题ID，不能覆盖不同问题")
-    for ident, issue in previous.items():
-        review = checks.get(ident)
-        if review is None:
-            issue.update(review_status="unresolved", resolved=False,
-                         resolution_reason="本轮未逐项复查，继续保留问题")
-            continue
-        status = review["status"]
-        quote, reason = text(review.get("report_quote")), text(review.get("reason"))
-        issue["last_review"] = deepcopy(review)
-        if status in TERMINAL_REVIEWS and (not reason or not quote):
-            status = "unresolved"
-            reason = "复查未提供非空的报告摘录和判断依据，不能关闭问题"
-        if status in TERMINAL_REVIEWS and ident in returned:
-            status, reason = "unresolved", "复查结论与待修问题列表冲突，保留问题"
-        issue.update(review_status=status, resolved=status in TERMINAL_REVIEWS, resolution_reason=reason)
-        issue["last_review"].update(effective_status=status, effective_reason=reason,
-                                   iteration=int(state.get("iteration", 0)))
-    by_id = {row["id"]: row for row in ledger}
-    by_signature = {signature(row): row for row in ledger if not row["resolved"]}
-    for original in result["issues"]:
-        update = deepcopy(original)
-        ident = text(update.get("id"))
-        existing = by_id.get(ident) or by_signature.get(signature(update))
-        if existing and not existing["resolved"]:
-            # 旧问题更新内容但保留身份、Writer状态和复查轨迹。
-            update.pop("id", None)
-            update.pop("resolved", None)
-            update.pop("review_status", None)
-            update.pop("writer_status", None)
-            update.pop("last_review", None)
-            update.pop("resolution_reason", None)
-            existing.update(update)
-            existing.update(resolved=False, review_status="unresolved")
-            continue
-        if not ident or ident in by_id:
-            ident = f"issue_{signature(update)}"
-        while ident in by_id:
-            ident += "_new"
-        update.update(id=ident, resolved=False, review_status="pending", writer_status="pending")
-        ledger.append(update)
-        by_id[ident] = update
-        by_signature[signature(update)] = update
-    return ledger, [row for row in ledger if not row["resolved"]]

@@ -640,7 +640,7 @@ URL: {url}
         # 执行补充搜索
         initial_source_ids = {source.get("document_id") for source in state.get("raw_sources", [])}
 
-        for query, task in list(zip(pending_queries, research_tasks))[:10]:
+        for query, task in zip(pending_queries, research_tasks):
             # 按位置配对，避免两个任务用同一条检索词时把问题 ID 和章节串错。
             target_sections = re.findall(
                 r"sec_[A-Za-z0-9_]+", str(task.get("target_section") or "")

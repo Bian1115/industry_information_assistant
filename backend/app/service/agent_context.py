@@ -85,6 +85,21 @@ class AgentCallContext:
 
 # 原句提取是独立任务：历史照常归档，但不把前一批正文再回放进下一批。
 _evidence_batch = ContextVar("evidence_batch_input", default=False)
+_isolated_input = ContextVar("isolated_agent_input", default=False)
+
+
+@contextmanager
+def isolated_agent_input():
+    """独立审核只发送调用方提供的材料；历史仍归档，但不回放或追加契约。"""
+    token = _isolated_input.set(True)
+    try:
+        yield
+    finally:
+        _isolated_input.reset(token)
+
+
+def is_isolated_agent_input():
+    return _isolated_input.get()
 
 
 @contextmanager
@@ -102,7 +117,7 @@ def is_evidence_batch_input():
 
 def protected_agent_messages(scope, system_prompt, user_prompt):
     """规划分批与最终发送共用同一份系统包装和冻结任务契约。"""
-    if scope is None:
+    if scope is None or is_isolated_agent_input():
         return [{"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}]
     policy = policy_for_scope(scope)
@@ -444,12 +459,13 @@ async def prepare_agent_messages(agent, scope, system_prompt, user_prompt, call_
         return True
 
     replay_agents = set(policy.replay_agents)
-    if agent.name not in replay_agents or _evidence_batch.get():
+    standalone = _evidence_batch.get() or is_isolated_agent_input()
+    if agent.name not in replay_agents or standalone:
         def compose_current():
-            current = call_context.messages() if call_context is not None and not _evidence_batch.get() else []
+            current = call_context.messages() if call_context is not None and not standalone else []
             return [protected[0], *current, protected[1]]
         before = counter.count_messages(compose_current())
-        call_summary_attempted = await compact_call_if_needed(before) if not _evidence_batch.get() else False
+        call_summary_attempted = await compact_call_if_needed(before) if not standalone else False
         messages = compose_current()
         actual = counter.count_messages(messages)
         await record_agent_message(agent.name, "context_view", {
@@ -464,7 +480,7 @@ async def prepare_agent_messages(agent, scope, system_prompt, user_prompt, call_
             "context_policy": policy.snapshot(), "history_replay": False,
             "compression_enabled": policy.compression_enabled,
             "offload_triggered": False,
-            "input_mode": "evidence_batch" if _evidence_batch.get() else "standard",
+            "input_mode": "isolated" if is_isolated_agent_input() else ("evidence_batch" if _evidence_batch.get() else "standard"),
         }, call_id)
         if actual > budget:
             raise ContextBudgetExceeded(budget, actual)

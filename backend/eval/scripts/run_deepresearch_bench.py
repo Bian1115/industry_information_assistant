@@ -86,14 +86,14 @@ logger = logging.getLogger("DRB")
 
 
 def valid_quality_score(value: Any):
-    """返回合法的 1-10 分数；历史 -1/0/空值统一视为无效评分。"""
-    if isinstance(value, bool) or value is None:
+    """返回当前三维审核的合法 0—100 分数；不转换旧评分。"""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
     try:
         score = float(value)
     except (TypeError, ValueError):
         return None
-    if not math.isfinite(score) or not 1 <= score <= 10:
+    if not math.isfinite(score) or not 0 <= score <= 100:
         return None
     return score
 
@@ -260,14 +260,15 @@ def output_path(model_name: str) -> str:
 
 
 def is_hard_pass(record: Dict[str, Any]) -> bool:
-    """原生评审通过且分数至少 7，才满足本轮 hard-pass 目标。"""
+    """当前三维百分制审核通过且分数至少 60，才满足本轮 hard-pass 目标。"""
     meta = record.get("_meta") or {}
     score = valid_quality_score(meta.get("quality_score"))
     return bool(
         record.get("article")
         and meta.get("quality_verdict") == "pass"
         and score is not None
-        and score >= 7
+        and meta.get("quality_score_basis") == "report_review_3d_100_v1"
+        and score >= 60
     )
 
 
@@ -479,7 +480,7 @@ async def run_one(service, task: Dict[str, Any], model_name: str, run_id: str,
                     quality_score_status = payload.get("quality_score_status", "not_reviewed")
                     quality_verdict = payload.get("quality_verdict", "not_reviewed")
                     for key in ("completion_reason", "citation_verification", "allowed_domains",
-                                "graph_version", "checkpoint_id"):
+                                "graph_version", "checkpoint_id", "quality_score_basis", "quality_dimension_scores"):
                         if key in payload:
                             completion_meta[key] = payload[key]
                 elif etype in {"error", "research_paused", "research_cancelled"}:
@@ -564,7 +565,7 @@ async def run_bench(args):
     print(f"筛选        : lang={args.lang} topic={args.topic or '全部'}")
     print(f"选中题目    : {len(selected)}   已完成 {len(done)}   待跑 {len(pending)}")
     print(f"并发        : {args.concurrency}   单题超时 {args.timeout}s")
-    print(f"完成标准    : {'hard pass（verdict=pass 且评分>=7）' if args.require_pass else '文章非空'}")
+    print(f"完成标准    : {'hard pass（verdict=pass 且三维百分制评分>=60）' if args.require_pass else '文章非空'}")
     print(f"输出        : {output_path(args.model_name)}")
     print("=" * 70)
 
@@ -685,13 +686,7 @@ def show_stat(model_name: str):
             if r.get("_meta", {}).get("quality_score") is not None
             and valid_quality_score(r["_meta"]["quality_score"]) is None
         )
-        passed = [
-            r for r in ok
-            if r.get("_meta", {}).get("quality_verdict") == "pass"
-            and (valid_quality_score(
-                r.get("_meta", {}).get("quality_score")
-            ) or 0) >= 7
-        ]
+        passed = [r for r in ok if is_hard_pass(r)]
         if chars:
             print(f"篇幅      : 平均 {sum(chars) // len(chars):,} 字符  "
                   f"(最短 {min(chars):,} / 最长 {max(chars):,})")
@@ -712,7 +707,7 @@ def show_stat(model_name: str):
         if invalid_scores:
             print(f"无效评分  : {invalid_scores} 条（未计入平均值）")
         print(f"硬通过    : {len(passed)}/{len(ok)}  "
-              f"（verdict=pass 且 score>=7）")
+              f"（verdict=pass 且 score>=60）")
 
     if bad:
         print(f"\n失败题目：")
@@ -995,7 +990,7 @@ def main():
     parser.add_argument("--resume", action="store_true",
                         help="显式续跑 --model-name 指定的已有独立运行；默认始终创建新运行")
     parser.add_argument("--require-pass", action="store_true",
-                        help="断点续跑时仅把 verdict=pass 且评分>=7 的题目视为完成")
+                        help="断点续跑时仅把 verdict=pass 且三维百分制评分>=60 的题目视为完成")
     parser.add_argument("--stat", action="store_true", help="查看进度并导出提交文件")
     parser.add_argument("--no-report", action="store_true",
                         help="不生成 docs/ 下的 markdown 报告")

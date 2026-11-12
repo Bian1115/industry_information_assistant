@@ -1,0 +1,44 @@
+{
+  "dataset_id": "drug-instructions-sample-20",
+  "dataset_name_zh": "药品说明书样本20份",
+  "selected_count": 20,
+  "file_count": 24,
+  "pdf_count": 20,
+  "metadata_count": 3,
+  "total_pdf_size_bytes": 3350381,
+  "total_pdf_size_mb": 3.195,
+  "total_pdf_pages": 96,
+  "sample_composition": "包含20份药品说明书 PDF 原件，以及批准文号、药品名称、剂型、生产企业、PDF 页数、文件大小和 SHA256 校验值等 JSON 元数据。",
+  "dosage_form_counts": {
+    "注射液": 1,
+    "薄膜衣片": 1,
+    "胶囊": 1,
+    "片": 1,
+    "粉针剂": 1,
+    "大蜜丸": 1,
+    "颗粒": 1,
+    "糖衣片": 1,
+    "水丸": 1,
+    "薄膜衣缓释片": 1,
+    "口服散": 1,
+    "糖浆": 1,
+    "口服溶液": 1,
+    "水蜜丸": 1,
+    "冻干粉针剂": 1,
+    "滴眼液": 1,
+    "软膏": 1,
+    "软胶囊": 1,
+    "双层片": 1,
+    "粉针(静脉滴注)": 1
+  },
+  "approval_type_counts": {
+    "国产化学药品": 16,
+    "中成药/港澳传统药": 3,
+    "境外生产药品": 1
+  },
+  "metadata_files": [
+    "metadata/drug_instructions_manifest.jsonl",
+    "metadata/files_manifest.jsonl",
+    "metadata/dataset_summary.json"
+  ]
+}

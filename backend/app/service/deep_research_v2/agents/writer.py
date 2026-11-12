@@ -36,7 +36,7 @@ from ..writer_claims import (
 from .base import BaseAgent
 from service.session_evidence_rag import BEGIN, END, evidence_prompt, revision_evidence_prompt
 from service.web_document import source_available
-from ..state import ResearchState, ResearchPhase
+from ..state import ResearchState, ResearchPhase, reopen_sections_for_rewrite
 from ..quality_pipeline import (
     evaluate_report_gate,
     MARKDOWN_LINK,
@@ -390,7 +390,7 @@ claims 必须覆盖修订后的完整章节，包括保留的事实；返回整�
 本轮原话：{state['original_query']}
 完整任务及有效要求：{state['query']}
 修改指令：{json.dumps(state.get('revision_instructions') or [], ensure_ascii=False)}
-本轮尚未解决的审核意见：{json.dumps([x for x in state.get('critic_feedback', []) if not x.get('resolved')], ensure_ascii=False)}
+本轮审核意见：{json.dumps(open_issues(state), ensure_ascii=False)}
 已有报告（仅作编辑对象，不能凭此新增事实）：
 {original}
 章节材料：{json.dumps([{'id': x['id'], 'title': x.get('title', ''), 'content': state['draft_sections'].get(x['id'], '')} for x in outline], ensure_ascii=False)}
@@ -731,6 +731,11 @@ sections必须恰好保留所有章节ID{json.dumps(ids)}，允许调整标题�
                        + "\n## 返工前章节正文（只作编辑对象）\n"
                        + (state.get("revision_original_sections") or {}).get(section_id, "")
                        + "\n" + ISSUE_RESPONSE_INSTRUCTIONS)
+        elif state.get("quality_review_summary") and state.get("quality_verdict") != "pass":
+            prompt += ("\n## 本轮审核总评（未列出单章问题，请据此改进）\n"
+                       + state["quality_review_summary"]
+                       + "\n## 返工前章节正文\n"
+                       + (state.get("revision_original_sections") or {}).get(section_id, ""))
 
         result = {}
         for attempt in range(2):
@@ -1239,12 +1244,10 @@ sections必须恰好保留所有章节ID{json.dumps(ids)}，允许调整标题�
         unresolved = open_issues(state)
         drafts = state.get("draft_sections") or {}
         if not unresolved or not drafts:
-            if not drafts:
-                self.logger.warning(
-                    "[LeadWriter] 缺少 draft_sections，为避免覆盖整篇，跳过自动修订"
-                )
-            state["phase"] = ResearchPhase.REVIEWING.value
-            return state
+            # 低分但 issues 为空仍须实际写作；把总评与原正文交给逐章写作入口。
+            state.setdefault("revision_original_sections", {}).update(drafts)
+            reopen_sections_for_rewrite(state, [section["id"] for section in state["outline"]])
+            return await self._write_report(state)
 
         budget = self._writing_budget(state)
         known_urls = self._known_source_urls(state)
@@ -1254,11 +1257,16 @@ sections必须恰好保留所有章节ID{json.dumps(ids)}，允许调整标题�
 
         for section in state.get("outline") or []:
             section_id = section.get("id")
+            pending_issues = section_issues(state, section_id)
+            if pending_issues and section.get("status") == "pending" and not drafts.get(section_id):
+                # Critic 新增的章节没有旧正文，调用章节写作入口生成后再合稿。
+                await self._write_checkpointed_section(state, section)
+                revised_sections += 1
+                continue
             original_content = (drafts.get(section_id) or "").strip()
             if not section_id or not original_content:
                 continue
 
-            pending_issues = section_issues(state, section_id)
             if not pending_issues:
                 continue
             feedback_text = revision_context(state, section_id)
@@ -1322,7 +1330,7 @@ sections必须恰好保留所有章节ID{json.dumps(ids)}，允许调整标题�
             addressed_ids.update(row["issue_id"] for row in responses if row["status"] == "addressed")
             unable_to_address.extend((result or {}).get("unable_to_address", []))
 
-        if revised_sections:
+        if revised_sections or section_issues(state, "__synthesis__"):
             await self._synthesize_report(state)
 
         self.add_message(state, "revision_complete", {

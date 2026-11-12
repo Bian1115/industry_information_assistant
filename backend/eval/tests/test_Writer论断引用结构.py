@@ -172,7 +172,7 @@ class WriterLifecycleTests(unittest.IsolatedAsyncioTestCase):
         state["draft_sections"] = {"sec_1": "旧正文" * 150, "sec_2": "保留正文" * 100}
         state["section_claims"] = {"sec_1": [claim("过期论断")], "sec_2": [claim("保留论断")]}
         state["synthesis_claims"] = [claim("旧摘要")]
-        state["critic_feedback"] = [{"id": "issue_1", "target_section": "sec_1", "resolved": False}]
+        state["critic_feedback"] = [{"issue_id": "issue_1", "resolved_section_ids": ["sec_1"], "target": {"chapter_id": "sec_1"}, "description": "修订本章", "evidence": "核对正文", "modification": "按已有材料修订本章", "requires_new_search": False}]
         writer = make_writer({
             "revised_content": "修订后的完整章节正文。" * 100,
             "claims": [claim("修订论断")], "addressed_issues": ["issue_1"],
@@ -185,7 +185,7 @@ class WriterLifecycleTests(unittest.IsolatedAsyncioTestCase):
         state = make_state()
         state["draft_sections"] = {"sec_1": "旧正文" * 150}
         state["section_claims"] = {"sec_1": [claim("原论断")]}
-        state["critic_feedback"] = [{"id": "i", "target_section": "sec_1"}]
+        state["critic_feedback"] = [{"issue_id": "i", "resolved_section_ids": ["sec_1"], "target": {"chapter_id": "sec_1"}, "description": "修订本章", "evidence": "核对正文", "modification": "按已有材料修订本章", "requires_new_search": False}]
         writer = make_writer({"revised_content": "太短", "claims": [claim("错误替换")]})
         await writer._revise_report(state)
         self.assertEqual(state["section_claims"]["sec_1"][0]["claim"], "原论断")

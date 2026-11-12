@@ -125,15 +125,17 @@ class BaseAgent(ABC):
         """原始输入与实际发送视图分开记录，摘要不会覆盖原始输入。"""
         scope = current_history_scope()
         call_id = str(uuid.uuid4())
+        from service.agent_context import is_isolated_agent_input
         from service.session_evidence_rag import fit_evidence_prompt
-        user_prompt = fit_evidence_prompt(system_prompt, user_prompt, scope, self.name,
-                                         min(max_tokens, self._output_limit()))
+        if not is_isolated_agent_input():
+            user_prompt = fit_evidence_prompt(system_prompt, user_prompt, scope, self.name,
+                                             min(max_tokens, self._output_limit()))
         if scope is None:
             from service.agent_context import (
-                is_evidence_batch_input, protected_agent_messages,
+                is_evidence_batch_input, is_isolated_agent_input, protected_agent_messages,
                 scoped_input_budget, ContextBudgetExceeded,
             )
-            if is_evidence_batch_input():
+            if is_evidence_batch_input() or is_isolated_agent_input():
                 from service.qwen_token_counter import get_qwen_token_counter
                 actual = get_qwen_token_counter().count_messages(
                     protected_agent_messages(None, system_prompt, user_prompt))
@@ -168,7 +170,9 @@ class BaseAgent(ABC):
                 if not isinstance(read, dict):
                     await record_agent_message(self.name, "llm_output", {"content": result}, call_id)
                     return result
-                from service.agent_context import is_evidence_batch_input
+                from service.agent_context import is_evidence_batch_input, is_isolated_agent_input
+                if is_isolated_agent_input():
+                    raise ValueError("独立审核不允许追加历史回读，只能使用本轮三个输入")
                 if is_evidence_batch_input():
                     raise ValueError("独立正文提取批次不允许追加历史回读；仅引用本批原句")
                 intermediate = await record_agent_message(self.name, "llm_intermediate", {"content": result}, call_id)

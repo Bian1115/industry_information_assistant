@@ -3,6 +3,26 @@
 项目的评估实现统一放在本目录。业务目录和 `backend/scripts/` 只保留薄兼容入口，
 避免历史导入和命令立即失效；新增评估代码应直接写到这里。
 
+## 当前中文验证集与报告双裁判
+
+2026-11-08起，本轮验证集为`eval/data/DeepResearch中文验证集-20261108/验证题目.jsonl`，桌面副本位于`/Users/bxy/Desktop/DeepResearch验证集/`。全部30题用于验证和调优，正式30题测试集后续另选。研究服务只接收原题，评分专用细则和参考报告不提供给研究服务。
+
+本轮生成报告评分入口为`eval/scripts/评分DeepResearchBench生成报告.py`，使用GPT-6 Astra与Claude各评分两次，沿用官方逐细则加权。离线保留全面性、洞察力、指令遵循、可读性四维0—10分；在线Critic使用可读性、全面性、深度三维百分制，结果分别报告。历史参考报告的Qwen脚本与运行文件属于历史实验，不是本轮评分入口。
+
+从`backend/`执行，`--reports`指定本轮已生成报告的JSONL，每道题只保留本次需要评价的一个执行尝试，字段为`id/prompt/article/_meta`：
+
+```bash
+# 先冻结输入并校验，不调用模型
+.venv/bin/python eval/scripts/评分DeepResearchBench生成报告.py \
+  --reports '<本轮报告JSONL路径>' --output eval/data/生成报告双裁判-20261108-首轮 --prepare-only
+
+# 执行已冻结输入；中断后仍使用同一条命令，只补未完成评分
+.venv/bin/python eval/scripts/评分DeepResearchBench生成报告.py \
+  --reports '<本轮报告JSONL路径>' --output eval/data/生成报告双裁判-20261108-首轮 --resume
+```
+
+GPT专用凭证与参数放在Git忽略的`backend/.env.eval-judges`，使用`EVAL_GPT_API_KEY`、`EVAL_GPT_MODEL`、`EVAL_GPT_BASE_URL`、`EVAL_GPT_REASONING_EFFORT`和`EVAL_GPT_MAX_OUTPUT_TOKENS`；Claude沿用已有`CLAUDE_RELAY_*`配置。GPT配置独立于研究服务的Qwen配置。裁判缺失或响应中断不生成双裁判融合分，不自动回退到Qwen。本入口保存本地评分和中文分析报告，Langfuse分数发布仍待后续联调。
+
 ## 目录结构
 
 ```text

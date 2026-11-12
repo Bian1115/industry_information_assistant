@@ -7,22 +7,20 @@ export type JsonObject = Record<string, any>
 /** 报告审核分数与已有引用核验分开呈现，缺少核验结果不视为通过。 */
 export function formatResearchReview(content: JsonObject): { passed: boolean; text: string } {
   const score = content.quality_score
-  const passed = typeof content.verdict === 'string'
-    ? content.verdict === 'pass'
-    : typeof content.passed === 'boolean' ? content.passed : typeof score === 'number' && score >= 7
+  const passed = content.verdict === 'pass'
   const lines = [
-    `🔍 审核结果: 报告审核评分 ${typeof score === 'number' ? `${score}/10` : '未评分'}`,
+    `🔍 审核结果: 报告审核评分 ${typeof score === 'number' ? `${score}/100` : '未评分'}`,
     passed ? '✅ 审核通过' : '⚠️ 需要修订',
   ]
   const dimensions = content.quality_dimension_scores || {}
   const labels = [
-    ['logical_coherence', '整体逻辑'],
-    ['requirement_coverage', '要求覆盖'],
-    ['freshness', '时效性'],
+    ['readability', '可读性'],
+    ['comprehensiveness', '全面性'],
+    ['depth', '深度'],
   ]
   const scores = labels
     .filter(([key]) => typeof dimensions[key] === 'number')
-    .map(([key, label]) => `${label} ${dimensions[key]}/10`)
+    .map(([key, label]) => `${label} ${dimensions[key]}/100`)
   if (scores.length) lines.push(scores.join('；'))
 
   const audit = content.citation_audit || {}

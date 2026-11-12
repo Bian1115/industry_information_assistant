@@ -1,4 +1,4 @@
-"""按问题返工、逐项复查与章节恢复的离线机制测试；不调用外部模型。"""
+"""按当前审核问题返工、整篇复审与章节恢复的离线机制测试；不调用外部模型。"""
 
 from copy import deepcopy
 import json
@@ -10,9 +10,10 @@ from unittest.mock import AsyncMock
 sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "app"), str(Path(__file__).parent)]
 
 from service.deep_research_v2.issue_workflow import (
-    issue_ledger, reconcile_reviews, record_writer_responses, review_packet,
+    record_writer_responses,
 )
 from service.deep_research_v2.state import reopen_sections_for_rewrite
+from service.deep_research_v2.review_contract import QUALITY_SCORE_BASIS
 from service.deep_research_v2.graph import pack_state
 from test_Writer论断引用结构 import make_state, make_writer, synthesis, DOCUMENT, URL, ORIGINAL
 import test_quality_score as quality_tests
@@ -25,11 +26,15 @@ OBSERVATIONS = []
 
 
 def issue(ident="问题收入", section="sec_1", **overrides):
-    row = {"id": ident, "target_section": section, "issue_type": "logic_error", "severity": "major",
-           "location": "收入段", "report_quote": "公司收入99亿元。", "requirement": "报告准确收入及统计范围",
-           "description": "收入数字与所列原文不一致", "evidence": "原文为100亿元，旧句为99亿元",
-           "suggestion": "修正收入，并保留范围限制", "acceptance_criteria": "收入为100亿元，并说明统计范围",
-           "requires_new_search": False, "search_query": "", "resolved": False}
+    title = {"sec_1": "收入", "sec_2": "风险", "全局": "执行摘要"}[section]
+    row = {"issue_id": ident, "issue_type": "logical_error", "severity": "major",
+           "target": {"target_type": "existing_section", "chapter_id": None if section == "全局" else section,
+                      "chapter_title": title, "specific_location": "收入段",
+                      "insert_after_chapter_id": None, "proposed_chapter_title": None},
+           "description": "公司收入99亿元，需报告准确收入及统计范围", "evidence": "原文为100亿元，旧句为99亿元",
+           "modification": "修正收入，并保留范围限制；收入为100亿元，并说明统计范围",
+           "requires_new_search": False, "search_query": "",
+           "resolved_section_ids": ["sec_1", "sec_2", "__synthesis__"] if section == "全局" else [section]}
     row.update(overrides)
     return row
 
@@ -51,13 +56,12 @@ def work(*issues):
     state["draft_sections"] = {"sec_1": "公司收入99亿元。" + "原有分析。" * 100, "sec_2": "无需改动。" * 100}
     for section in state["outline"]:
         section["status"] = "drafted"
-    state["final_report"] = QUOTE + "当前报告其余正文。"
+    state["final_report"] = "## 1 收入\n" + QUOTE + "\n## 2 风险\n当前报告其余正文。"
     return state
 
 
-def verdict(issues=None, reviews=None):
-    return {"overall_assessment": {"quality_score": 9, "verdict": "pass"},
-            "issues": issues or [], "issue_reviews": reviews or []}
+def verdict(issues=None):
+    return quality_tests.review(80, issues)
 
 
 class WriterIssueTests(unittest.IsolatedAsyncioTestCase):
@@ -72,7 +76,7 @@ class WriterIssueTests(unittest.IsolatedAsyncioTestCase):
         await writer.process(state)
         self.assertIn("按章返工清单", writer.call_llm.await_args.kwargs["user_prompt"])
         self.assertEqual(state["writer_revision_records"][0]["status"], "addressed")
-        self.assertFalse(state["critic_feedback"][0]["resolved"])
+        self.assertEqual(state["critic_feedback"][0]["issue_id"], "问题收入")
 
     async def test_direct_revision_records_location_evidence_and_waits_for_review(self):
         state = work()
@@ -83,7 +87,7 @@ class WriterIssueTests(unittest.IsolatedAsyncioTestCase):
         for value in ("问题收入", "公司收入99亿元。", "报告准确收入及统计范围", "原文为100亿元", "修正收入", "收入为100亿元，并说明统计范围", ORIGINAL):
             self.assertIn(value, prompt)
         self.assertEqual(state["draft_sections"]["sec_2"], unchanged)
-        self.assertFalse(state["critic_feedback"][0]["resolved"])
+        self.assertEqual(state["critic_feedback"][0]["issue_id"], "问题收入")
         self.assertEqual(state["critic_feedback"][0]["writer_status"], "addressed")
         row = state["writer_revision_records"][0]
         self.assertEqual(row["validation_errors"], [])
@@ -104,7 +108,7 @@ class WriterIssueTests(unittest.IsolatedAsyncioTestCase):
         for value in ("judgment_basis", "acceptance_criteria", "remaining_gaps", "sources_collected", "收入与统计范围均有依据", original):
             self.assertIn(value, prompt)
         self.assertEqual(state["writer_revision_records"][0]["status"], "addressed")
-        self.assertFalse(state["critic_feedback"][0]["resolved"])
+        self.assertEqual(state["critic_feedback"][0]["issue_id"], "问题收入")
 
     async def test_mixed_search_and_text_issues_reopen_both_chapters(self):
         state = work(issue(requires_new_search=True, search_query="公司年报"), issue("范围问题", "sec_2"))
@@ -121,7 +125,7 @@ class WriterIssueTests(unittest.IsolatedAsyncioTestCase):
         scout._execute_search = AsyncMock(return_value=[])
         await scout._supplementary_research(state)
         self.assertEqual(state["issue_search_results"]["问题收入"]["status"], "no_usable_evidence")
-        self.assertFalse(state["critic_feedback"][0]["resolved"])
+        self.assertEqual(state["critic_feedback"][0]["issue_id"], "问题收入")
 
     async def test_global_issue_is_also_passed_to_synthesis_with_trace(self):
         state = work(issue(section="全局"))
@@ -136,7 +140,7 @@ class WriterIssueTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("摘要、结论与展望的按问题返工清单", writer.call_llm.await_args.kwargs["user_prompt"])
         self.assertEqual(state["writer_revision_records"][0]["section_id"], "__synthesis__")
         self.assertEqual(state["writer_revision_records"][0]["evidence_excerpts"][0]["kind"], "section_claim_reference")
-        self.assertFalse(state["critic_feedback"][0]["resolved"])
+        self.assertEqual(state["critic_feedback"][0]["issue_id"], "问题收入")
 
 
 class TraceValidationTests(unittest.TestCase):
@@ -158,7 +162,7 @@ class TraceValidationTests(unittest.TestCase):
                 rows = record_writer_responses(state, "sec_1", CONTENT, result, self.packet)
                 self.assertEqual(rows[0]["status"], "not_reported")
                 self.assertTrue(rows[0]["validation_errors"])
-                self.assertFalse(state["critic_feedback"][0]["resolved"])
+                self.assertEqual(state["critic_feedback"][0]["issue_id"], "问题收入")
 
     def test_rag_units_keep_program_resolved_excerpts_and_idempotent_records(self):
         state = work()
@@ -170,142 +174,12 @@ class TraceValidationTests(unittest.TestCase):
         self.assertEqual(state["writer_revision_records"][0]["evidence_excerpts"][0]["text"], ORIGINAL)
         self.assertEqual(state["critic_feedback"][0]["writer_status"], "addressed")
 
-    def test_review_packet_detects_stale_or_removed_revision_location(self):
-        state = work()
-        record_writer_responses(state, "sec_1", CONTENT, {"issue_responses": [response()]}, self.packet)
-        state["final_report"] = "合稿后这句已经被替换。"
-        self.assertFalse(json.loads(review_packet(state))[0]["located_in_current_report"])
-
-    def test_legacy_writer_resolved_flag_requires_explicit_review(self):
-        state = work(issue(resolved=True))
-        row = issue_ledger(state)[0]
-        self.assertFalse(row["resolved"])
-        self.assertEqual(row["writer_status"], "addressed")
-
     def test_partial_global_response_does_not_claim_all_chapters_addressed(self):
         state = work(issue(section="全局"))
         record_writer_responses(state, "sec_1", CONTENT, {"issue_responses": [response()]}, self.packet)
         self.assertEqual(state["critic_feedback"][0]["writer_status"], "partial")
         record_writer_responses(state, "sec_2", CONTENT, {}, self.packet)
         self.assertEqual(state["critic_feedback"][0]["writer_status"], "not_reported")
-
-
-class CriticIssueTests(unittest.IsolatedAsyncioTestCase):
-    async def process(self, state, result):
-        critic = quality_tests.CriticReviewFlowTests._make_critic()
-        critic._review_content = AsyncMock(return_value=result)
-        state["phase"] = "reviewing"
-        await critic.process(state)
-        return state
-
-    async def test_omitted_old_issue_is_retained_and_blocks_pass(self):
-        state = work()
-        await self.process(state, verdict())
-        self.assertEqual(state["critic_feedback"][0]["id"], "问题收入")
-        self.assertFalse(state["critic_feedback"][0]["resolved"])
-        self.assertEqual(state["quality_verdict"], "needs_revision")
-        self.assertLessEqual(state["quality_score"], 6)
-
-    async def test_confirm_repair_and_dismiss_wrong_critique_are_distinct(self):
-        for status in ("resolved", "dismissed"):
-            with self.subTest(status=status):
-                state = work()
-                original = state["final_report"]
-                await self.process(state, verdict(reviews=[{"issue_id": "问题收入", "status": status,
-                    "report_quote": QUOTE, "reason": "逐项对照当前正文，收入和统计范围符合验收；撤销时确认原批评误读正文"}]))
-                self.assertTrue(state["critic_feedback"][0]["resolved"])
-                self.assertEqual(state["critic_feedback"][0]["review_status"], status)
-                self.assertEqual(state["quality_verdict"], "pass")
-                self.assertEqual(state["final_report"], original)
-
-    async def test_each_old_issue_requires_its_own_review(self):
-        state = work(issue(), issue("第二问题", "sec_2", severity="minor"))
-        await self.process(state, verdict(reviews=[{"issue_id": "问题收入", "status": "resolved", "report_quote": QUOTE, "reason": "满足验收"}]))
-        self.assertTrue(state["critic_feedback"][0]["resolved"])
-        self.assertFalse(state["critic_feedback"][1]["resolved"])
-        self.assertEqual(state["quality_verdict"], "needs_revision")
-
-    async def test_nonempty_report_quote_does_not_require_exact_match(self):
-        for status in ("resolved", "dismissed"):
-            for quote in ("收入段已说明100亿元收入及统计范围", f"“{QUOTE}”（sec_1）", "收入已修正……统计范围已说明"):
-                with self.subTest(status=status, quote=quote):
-                    state = work()
-                    self.assertNotIn(quote, state["final_report"])
-                    await self.process(state, verdict(reviews=[{"issue_id": "问题收入", "status": status,
-                        "report_quote": quote, "reason": "当前收入和统计范围已满足该条验收"}]))
-                    self.assertTrue(state["critic_feedback"][0]["resolved"])
-                    self.assertEqual(state["critic_feedback"][0]["review_status"], status)
-                    self.assertEqual(state["quality_verdict"], "pass")
-                    self.assertEqual(state["phase"], "completed")
-
-    async def test_empty_report_quote_or_reason_still_prevents_closure(self):
-        for status in ("resolved", "dismissed"):
-            for quote, reason in ((None, "已满足验收"), ("", "已满足验收"), ("   ", "已满足验收"),
-                                  (QUOTE, None), (QUOTE, ""), (QUOTE, "   ")):
-                with self.subTest(status=status, quote=quote, reason=reason):
-                    state = work()
-                    await self.process(state, verdict(reviews=[{"issue_id": "问题收入", "status": status,
-                        "report_quote": quote, "reason": reason}]))
-                    self.assertFalse(state["critic_feedback"][0]["resolved"])
-                    self.assertEqual(state["quality_verdict"], "needs_revision")
-
-    async def test_more_sources_and_high_score_do_not_implicitly_resolve(self):
-        state = work()
-        state["raw_sources"].append({"document_id": "新增原文", "content": "不相关新内容"})
-        state["critic_feedback"][0]["evidence_fingerprint"] = "旧指纹"
-        await self.process(state, verdict())
-        self.assertFalse(state["critic_feedback"][0]["resolved"])
-
-    async def test_repeated_issue_keeps_id_even_when_model_renumbers(self):
-        state = work()
-        await self.process(state, verdict(issues=[issue("模型重编号")]))
-        self.assertEqual(len(state["critic_feedback"]), 1)
-        self.assertEqual(state["critic_feedback"][0]["id"], "问题收入")
-
-    async def test_unresolved_old_issue_keeps_search_query_and_exact_acceptance(self):
-        state = work(issue(requires_new_search=True, search_query="原始统计范围"))
-        await self.process(state, verdict(reviews=[{"issue_id": "问题收入", "status": "unresolved", "reason": "仍缺统计范围"}]))
-        task = state["pending_research_tasks"][0]
-        self.assertEqual(task["issue_id"], "问题收入")
-        self.assertEqual(task["acceptance"], "收入为100亿元，并说明统计范围")
-
-    async def test_critic_prompt_contains_prior_issues_writer_evidence_and_acceptance(self):
-        state = work()
-        record_writer_responses(state, "sec_1", CONTENT, {"issue_responses": [response()]}, TraceValidationTests.packet)
-        critic = quality_tests.CriticReviewFlowTests._make_critic()
-        critic.call_llm = AsyncMock(return_value=json.dumps(verdict(), ensure_ascii=False))
-        await critic._review_content(state)
-        prompt = critic.call_llm.await_args.kwargs["user_prompt"]
-        for token in ("问题收入", "收入为100亿元，并说明统计范围", "revised_quote", ORIGINAL, "issue_reviews"):
-            self.assertIn(token, prompt)
-
-
-class ReviewContractTests(unittest.TestCase):
-    def test_unknown_duplicate_and_closed_ids_are_rejected(self):
-        cases = [[{"issue_id": "未知", "status": "resolved"}],
-                 [{"issue_id": "问题收入", "status": "unresolved"}] * 2,
-                 [{"issue_id": "问题收入", "status": []}],
-                 [{"issue_id": [], "status": "resolved"}]]
-        for rows in cases:
-            with self.subTest(rows=rows), self.assertRaises(ValueError):
-                reconcile_reviews(work(), verdict(reviews=rows))
-
-    def test_closed_id_cannot_be_reused_for_a_new_issue(self):
-        state = work(issue(review_status="resolved", resolved=True))
-        ledger, active = reconcile_reviews(state, verdict(issues=[issue(description="新的不同问题")]))
-        self.assertEqual(len(ledger), 2)
-        self.assertNotEqual(active[0]["id"], "问题收入")
-        self.assertTrue(ledger[0]["resolved"])
-
-    def test_duplicate_new_issue_ids_cannot_silently_drop_an_issue(self):
-        with self.assertRaisesRegex(ValueError, "重复问题ID"):
-            reconcile_reviews(work(), verdict(issues=[issue(), issue(description="不同问题")]))
-
-    def test_conflicting_closed_review_and_open_issue_does_not_close(self):
-        state = work()
-        _, active = reconcile_reviews(state, verdict(issues=[issue()], reviews=[{
-            "issue_id": "问题收入", "status": "resolved", "report_quote": QUOTE, "reason": "已修复"}]))
-        self.assertEqual(active[0]["id"], "问题收入")
 
 
 class RevisionCheckpointTests(unittest.IsolatedAsyncioTestCase):
@@ -337,7 +211,7 @@ class RevisionCheckpointTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(result["writer_revision_records"]), 1)
         self.assertEqual(result["writer_revision_records"][0]["issue_id"], "问题收入")
         self.assertEqual(result["writer_revision_records"][0]["status"], "addressed")
-        self.assertFalse(result["critic_feedback"][0]["resolved"])
+        self.assertEqual(result["critic_feedback"][0]["issue_id"], "问题收入")
 
 
 class RealAgentGraphTests(unittest.IsolatedAsyncioTestCase):
@@ -353,8 +227,7 @@ class RealAgentGraphTests(unittest.IsolatedAsyncioTestCase):
         critic = quality_tests.CriticReviewFlowTests._make_critic()
         critic._review_content = AsyncMock(side_effect=[
             verdict(issues=[issue(requires_new_search=search, search_query="公司收入及统计范围" if search else "")]),
-            verdict(reviews=[{"issue_id": "问题收入", "status": "resolved", "report_quote": f"收入段：{QUOTE}（sec_1）",
-                              "reason": "当前收入句已修正为100亿元，保留原文统计范围，满足该条验收。"}]),
+            verdict(),
         ])
         scout = make_scout()
         graph = build_graph(make_agents(writer=writer, critic=critic, scout=scout), InMemorySaver(),
@@ -363,9 +236,9 @@ class RealAgentGraphTests(unittest.IsolatedAsyncioTestCase):
         config = graph_config("补搜问题图" if search else "修订问题图")
         result = (await graph.ainvoke(pack_state(state), config))["research"]
         self.assertEqual(result["completion_reason"], "passed")
-        self.assertEqual(result["critic_feedback"][0]["id"], "问题收入")
-        self.assertEqual(result["critic_feedback"][0]["writer_status"], "addressed")
-        self.assertEqual(result["critic_feedback"][0]["review_status"], "resolved")
+        self.assertEqual(result["critic_feedback"], [])
+        self.assertEqual(result["critic_history"][0][0]["issue_id"], "问题收入")
+        self.assertEqual(result["critic_history"][0][0]["writer_status"], "addressed")
         self.assertEqual(result["writer_revision_records"][0]["evidence_excerpts"][0]["text"], ORIGINAL)
         self.assertEqual(critic._review_content.await_count, 2)
         self.assertEqual(scout._execute_search.await_count, 1 if search else 0)

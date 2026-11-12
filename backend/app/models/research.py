@@ -43,7 +43,7 @@ class ResearchCheckpoint(Base):
     # ---- 质量评估字段 ----
     # CriticMaster 产出的评分此前只在 SSE 事件里出现一次就丢了，
     # 落库后才能做跨会话的聚合分析和回归对比。
-    quality_score = Column(Float, comment="CriticMaster 质量评分 1-10")
+    quality_score = Column(Float, comment="CriticMaster 三维均分 0-100")
     quality_score_status = Column(
         String(48),
         comment="评分来源: valid/valid_after_retry/fallback_invalid_model_output",

@@ -25,7 +25,9 @@ def fixture():
     state["facts"][1]["is_supplementary"] = True
     state["facts"][1]["critic_issue_id"] = "issue_1"
     state["draft_sections"] = {"sec_1": "本章正文。" * 150, "sec_2": "另一章正文。" * 150}
-    state["critic_feedback"] = [{"id": "issue_1", "target_section": "sec_1", "resolved": False}]
+    state["critic_feedback"] = [{"issue_id": "issue_1", "resolved_section_ids": ["sec_1"],
+        "target": {"target_type": "existing_section", "chapter_id": "sec_1", "chapter_title": "收入", "specific_location": "收入段"},
+        "description": "修订收入段", "evidence": "核对原文", "modification": "按原文修订收入", "requires_new_search": False}]
     return state
 
 
@@ -117,7 +119,7 @@ class RevisionInputTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_global_feedback_still_keeps_each_chapters_materials_separate(self):
         state = fixture()
-        state["critic_feedback"][0]["target_section"] = "全局"
+        state["critic_feedback"][0]["resolved_section_ids"] = ["sec_1", "sec_2", "__synthesis__"]
         first, second = await self.revise(state)
         self.assertEqual([f["evidence_id"] for f in packet(first)["facts"]], ["f1"])
         self.assertEqual([f["evidence_id"] for f in packet(second)["facts"]], ["f2"])

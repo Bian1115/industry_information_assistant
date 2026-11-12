@@ -15,7 +15,7 @@ from service.deep_research_v2.report_claim_extraction import (
 from service.deep_research_v2.report_citation_inputs import report_claim_inputs
 from service.deep_research_v2.citation_verification import verify_stage_citations
 from service.deep_research_v2.citation_repair import repair_report_citations
-from service.deep_research_v2.agents.critic import CriticMaster, handoff_legacy_citation_issues
+from service.deep_research_v2.agents.critic import CriticMaster
 
 URL = "https://example.gov.cn/report"
 
@@ -268,20 +268,11 @@ class BoundaryTests(unittest.TestCase):
         with self.assertRaises(NLIResponseError):
             QwenNLI.parse_response(json.dumps({"items": [row]}), 1)
 
-    def test_critic_owns_report_level_checks_only(self):
+    def test_critic_can_request_missing_sources_but_cannot_claim_external_verification(self):
         prompt = CriticMaster.REVIEW_PROMPT
-        self.assertIn("观点平衡", prompt)
-        self.assertIn("整体时效", prompt)
-        self.assertNotIn('"issue_type": "missing_source/', prompt)
-        self.assertIn("不在此重复裁定", prompt)
-
-    def test_legacy_citation_issue_is_handed_off_without_claiming_it_was_resolved(self):
-        state = {"critic_feedback": [{"id": "old", "issue_type": "missing_source", "resolved": False},
-                                    {"id": "logic", "issue_type": "logic_error", "resolved": False}]}
-        handoff_legacy_citation_issues(state)
-        self.assertEqual([i["id"] for i in state["critic_feedback"]], ["logic"])
-        self.assertEqual(state["citation_issue_handoffs"][0]["owner"], "citation_verification")
-        self.assertFalse(state["citation_issue_handoffs"][0]["resolved"])
+        self.assertIn("missing_source", prompt)
+        self.assertIn("不得声称某一外部事实已经得到验证", prompt)
+        self.assertIn("待核实", prompt)
 
 
 class ExtractorRequestTests(unittest.IsolatedAsyncioTestCase):

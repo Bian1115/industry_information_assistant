@@ -115,17 +115,17 @@ def deterministic_critic_issues(state: Mapping[str, Any]) -> List[Dict[str, Any]
         for index, reason in enumerate(gate.get("blocking_reasons", []), 1):
             digest = hashlib.sha1(f"{gate['gate']}:{reason}".encode()).hexdigest()[:8]
             issues.append({
-                "id": f"rule_{digest}",
-                "target_section": "全局",
-                "issue_type": "source_scope" if "引用" in reason else "incomplete",
+                "issue_id": f"rule_{digest}",
+                "target": {"target_type": "existing_section", "chapter_id": None,
+                           "chapter_title": "全文", "specific_location": gate["gate"],
+                           "insert_after_chapter_id": None, "proposed_chapter_title": None},
+                "issue_type": "instruction_violation" if "引用" in reason else "content_omission",
                 "severity": "critical",
-                "location": gate["gate"],
                 "description": reason,
                 "evidence": str(gate),
-                "suggestion": "完善报告正文或修正来源链接后再提交报告。",
+                "modification": "完善报告正文或修正来源链接后再提交报告。",
                 "requires_new_search": True,
                 "search_query": f"{str(state.get('query') or '').strip()} {reason} 官方原始资料".strip(),
-                "resolved": False,
                 "rule_based": True,
             })
     return issues

@@ -124,19 +124,20 @@ class CriticEvidenceTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(PermissionError):
             await build_critic_evidence(value)
 
-    async def test_prompt_contains_claims_originals_and_old_issue(self):
+    async def test_current_prompt_uses_report_without_claim_packet_or_old_issues(self):
         value = state()
-        value["critic_feedback"] = [{"id": "旧问题1", "description": "需解释统计范围", "resolved": False}]
+        value["critic_feedback"] = [{"issue_id": "旧问题1", "description": "需解释统计范围"}]
         critic = CriticMaster.__new__(CriticMaster)
         critic.logger = logging.getLogger("test.critic.evidence")
-        critic.call_llm = AsyncMock(return_value=json.dumps({"issues": [], "overall_assessment": {
-            "quality_score": 8, "verdict": "pass"}}))
+        critic.call_llm = AsyncMock(return_value=json.dumps({"issues": [], "strength_points": [], "overall_assessment": {
+            "quality_score": 80, "verdict": "pass", "summary": "良好",
+            "dimension_scores": {"readability": 80, "comprehensiveness": 80, "depth": 80}}}))
         critic.parse_json_response = json.loads
         await critic._review_content(value)
         prompt = critic.call_llm.await_args.kwargs["user_prompt"]
-        for token in ("claim_1", "excerpt_1", ORIGINAL, "旧问题1", "验收条件"):
-            self.assertIn(token, prompt)
-        self.assertNotIn("### 引用目录", prompt)
+        self.assertIn(REPORT, prompt)
+        for token in ("claim_1", "excerpt_1", "旧问题1", "issue_reviews"):
+            self.assertNotIn(token, prompt)
 
 
 if __name__ == "__main__":

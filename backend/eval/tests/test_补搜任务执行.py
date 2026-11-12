@@ -149,17 +149,17 @@ class SupplementaryTaskExecutionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(scout._execute_search.await_args.args, ("示例公司 年报 营收",))
         self.assertEqual(task["query"], "  示例公司 年报 营收\n")
 
-    async def test_supplementary_search_keeps_ten_task_limit_and_cleanup(self):
+    async def test_supplementary_search_executes_all_tasks_before_cleanup(self):
         state, scout = make_state(), make_scout()
         state["pending_research_tasks"] = [
             make_task(f"issue_{index}", f"sec_{index}", f"公司{index} 年报")
             for index in range(12)
         ]
         await scout._supplementary_research(state)
-        self.assertEqual(scout._execute_search.await_count, 10)
+        self.assertEqual(scout._execute_search.await_count, 12)
         self.assertEqual(
             [call.args[0] for call in scout._execute_search.await_args_list],
-            [f"公司{index} 年报" for index in range(10)],
+            [f"公司{index} 年报" for index in range(12)],
         )
         self.assertEqual(state["pending_research_tasks"], [])
 

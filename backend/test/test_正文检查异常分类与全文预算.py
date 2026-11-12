@@ -210,12 +210,12 @@ class ReportBudgetTests(unittest.IsolatedAsyncioTestCase):
     async def test_revision_can_shrink_old_long_section_under_user_budget(self):
         state, value = writing_state(800, 1), writer()
         state["draft_sections"] = {"sec_1": "原文" * 1500}
-        state["critic_feedback"] = [{"id": "issue1", "target_section": "sec_1", "resolved": False}]
+        state["critic_feedback"] = [{"issue_id": "issue1", "resolved_section_ids": ["sec_1"], "target": {"chapter_id": "sec_1"}, "description": "修订本章", "evidence": "核对正文", "modification": "按已有材料修订本章", "requires_new_search": False}]
         value.call_llm = AsyncMock(side_effect=[json.dumps({"revised_content": "正文" * 160 + f"[来源]({URL})",
             "claims": [], "addressed_issues": ["issue1"], "unable_to_address": []}),
             '{"executive_summary":"摘要","conclusions":[],"outlook":"展望","claims":[]}'])
         await value._revise_report(state)
-        self.assertTrue(state["critic_feedback"][0]["resolved"])
+        self.assertEqual(state["critic_feedback"][0]["writer_status"], "not_reported")
         self.assertLessEqual(body_character_count(state["final_report"]), 800)
 
 

@@ -153,7 +153,7 @@ class SynthesisTests(unittest.IsolatedAsyncioTestCase):
         state["raw_sources"].append({"id": "s2", "url": OTHER, "title": "新版来源"})
         state["draft_sections"] = {"sec_1": f"旧引用[报告]({URL})" + "原文" * 300}
         state["references"] = [{"url": URL, "title": "旧来源"}]
-        state["critic_feedback"] = [{"id": "issue1", "target_section": "sec_1", "resolved": False}]
+        state["critic_feedback"] = [{"issue_id": "issue1", "resolved_section_ids": ["sec_1"], "target": {"chapter_id": "sec_1"}, "description": "修订本章", "evidence": "核对正文", "modification": "按已有材料修订本章", "requires_new_search": False}]
         writer = writer_fixture()
         writer.call_llm = AsyncMock(side_effect=[json.dumps({
             "revised_content": f"新引用[报告]({OTHER})" + "修订后的章节。" * 100,

@@ -128,11 +128,14 @@ class SectionRevisionTests(unittest.IsolatedAsyncioTestCase):
             "quality_gates": {},
             "references": [],
             "critic_feedback": [{
-                "id": "issue_a",
-                "target_section": "sec_1",
+                "issue_id": "issue_a",
+                "resolved_section_ids": ["sec_1"],
+                "target": {"chapter_id": "sec_1"},
+                "evidence": "原文比较",
+                "requires_new_search": False,
                 "severity": "major",
                 "description": "证据不足",
-                "suggestion": "补充官方来源",
+                "modification": "补充官方来源",
                 "resolved": False,
             }],
             "messages": [],
@@ -145,7 +148,7 @@ class SectionRevisionTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(revised, state["final_report"])
         self.assertIn(untouched, state["final_report"])
         self.assertNotEqual(state["final_report"], revised)
-        self.assertFalse(state["critic_feedback"][0]["resolved"])
+        self.assertEqual(state["critic_feedback"][0]["issue_id"], "issue_a")
         self.assertEqual(state["writer_revision_records"][0]["status"], "not_reported")
         # 旧 addressed_issues 自报不提供定位和依据，不能关闭审核问题。
         self.assertTrue(state["quality_gates"]["report"]["passed"])
